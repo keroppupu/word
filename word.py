@@ -49,7 +49,7 @@ class WordBookApp:
         self.selected_bg_image_file = None
         self.background_loaded = False
         self.default_bg_color = pyxel.COLOR_GRAY
-        self._load_random_background() # 初回ロード
+        self._load_random_background()
 
         self.button_height = 18
         self.button_margin = 10
@@ -88,18 +88,16 @@ class WordBookApp:
         available_images = [f for f in self.background_image_files if os.path.exists(f)]
 
         if not available_images:
-            if not self.background_loaded: # 初回のみメッセージ表示
+            if not self.background_loaded:
                 print("利用可能な背景画像ファイルがカレントディレクトリに見つかりませんでした。")
             self.background_loaded = False
             return
 
         self.selected_bg_image_file = random.choice(available_images)
-        # print(f"背景画像として '{self.selected_bg_image_file}' を選択しました。") # 頻繁に出るのでコメントアウトも検討
 
         try:
             pyxel.image(IMAGE_BANK_BACKGROUND).load(0, 0, self.selected_bg_image_file)
             self.background_loaded = True
-            # print(f"背景画像 '{self.selected_bg_image_file}' のロードに成功しました。")
         except RuntimeError as e:
             print(f"エラー: 背景画像 '{self.selected_bg_image_file}' のロードに失敗しました: {e}")
             self.background_loaded = False
@@ -138,16 +136,34 @@ class WordBookApp:
         if not self.words:
             return
 
-        prev_pressed = pyxel.btnp(pyxel.KEY_LEFT) or pyxel.btnp(pyxel.KEY_A) or pyxel.btnp(pyxel.KEY_C)
-        next_pressed = pyxel.btnp(pyxel.KEY_RIGHT) or pyxel.btnp(pyxel.KEY_D) or pyxel.btnp(pyxel.KEY_X)
+        # --- 入力処理の統合 ---
+        # 単語を前へ
+        prev_pressed = (
+            pyxel.btnp(pyxel.KEY_LEFT) or pyxel.btnp(pyxel.KEY_A) or pyxel.btnp(pyxel.KEY_C) or
+            pyxel.btnp(pyxel.GAMEPAD1_BUTTON_DPAD_LEFT) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_X)
+        )
+
+        # 単語を次へ
+        next_pressed = (
+            pyxel.btnp(pyxel.KEY_RIGHT) or pyxel.btnp(pyxel.KEY_D) or pyxel.btnp(pyxel.KEY_X) or
+            pyxel.btnp(pyxel.GAMEPAD1_BUTTON_DPAD_RIGHT) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_B)
+        )
+
+        # 意味の表示/非表示
+        toggle_meaning_pressed = (
+            pyxel.btnp(pyxel.KEY_Z) or
+            pyxel.btnp(pyxel.GAMEPAD1_BUTTON_A) or pyxel.btnp(pyxel.GAMEPAD1_BUTTON_DPAD_DOWN)
+        )
 
         if prev_pressed:
             self.go_to_prev_word()
-        elif next_pressed: # elifにして同時押しでの連続切り替えを防ぐ
+        elif next_pressed: # elif を使用して同時押しによる連続動作を防ぐ
             self.go_to_next_word()
         
-        if pyxel.btnp(pyxel.KEY_Z): 
+        if toggle_meaning_pressed:
             self.toggle_show_meaning()
+        # --- 入力処理ここまで ---
+
 
     def go_to_prev_word(self):
         if not self.words: return
@@ -156,7 +172,7 @@ class WordBookApp:
         else:
             self.current_word_index = len(self.words) -1
         self.show_meaning = False
-        self._load_random_background() # 単語切り替え時に背景も更新
+        self._load_random_background()
 
     def go_to_next_word(self):
         if not self.words: return
@@ -165,7 +181,7 @@ class WordBookApp:
         else:
             self.current_word_index = 0
         self.show_meaning = False
-        self._load_random_background() # 単語切り替え時に背景も更新
+        self._load_random_background()
             
     def toggle_show_meaning(self):
         if not self.words: return
@@ -239,10 +255,10 @@ class WordBookApp:
         else:
             self.draw_centered_text(80, "**********", self.text_color, self.border_color, self.custom_font)
 
-        self.draw_button(self.prev_button_rect, "Prev (C)")
-        self.draw_button(self.next_button_rect, "Next (X)")
+        self.draw_button(self.prev_button_rect, "Prev (C/XBtn)") # キーヒントを少し更新
+        self.draw_button(self.next_button_rect, "Next (X/BBtn)")
         
-        toggle_btn_text = "Show (Z)" if not self.show_meaning else "Hide (Z)"
+        toggle_btn_text = "Show (Z/ABtn)" if not self.show_meaning else "Hide (Z/ABtn)"
         self.draw_button(self.toggle_meaning_button_rect, toggle_btn_text)
 
         progress_text = f"{self.current_word_index + 1} / {len(self.words)}"
@@ -259,11 +275,16 @@ class WordBookApp:
         instruction_y_base = self.screen_height - self.button_height - self.button_margin - 10
         line_height = pyxel.FONT_HEIGHT + 2
 
-        instruction_text1 = "L/R or C/X: Word"
-        instruction_text2 = "Z (A button): Meaning"
-        instruction_text3 = "Q: Quit"
+        instruction_text1 = "L/R or C/X (Key) | D-Pad L/R or X (Pad): Word"
+        instruction_text2 = "Z (Key) | A or D-Pad Down (Pad): Meaning"
+        instruction_text3 = "Q (Key): Quit"
         
+        # 画面幅に合わせて説明文を調整、必要なら2行に
         inst_text_w1 = len(instruction_text1) * pyxel.FONT_WIDTH
+        if inst_text_w1 > self.screen_width - 10: # 画面幅を超えるようなら簡略化
+            instruction_text1 = "Arrows/C/X | D-Pad/XBtn: Word"
+            inst_text_w1 = len(instruction_text1) * pyxel.FONT_WIDTH
+        
         draw_text_with_border(
             (self.screen_width - inst_text_w1) // 2, 
             instruction_y_base - line_height * 2, 
@@ -273,6 +294,10 @@ class WordBookApp:
         )
         
         inst_text_w2 = len(instruction_text2) * pyxel.FONT_WIDTH
+        if inst_text_w2 > self.screen_width - 10:
+            instruction_text2 = "Z | ABtn/D-Down: Meaning"
+            inst_text_w2 = len(instruction_text2) * pyxel.FONT_WIDTH
+
         draw_text_with_border(
             (self.screen_width - inst_text_w2) // 2, 
             instruction_y_base - line_height, 
@@ -295,13 +320,12 @@ if __name__ == '__main__':
     print("------------------------------------")
     print(f"単語データを '{WordBookApp.CSV_FILENAME}' から読み込みます。")
     print("背景画像をカレントディレクトリの '01.png'～'10.png' からランダムに読み込み、")
-    print("単語を切り替えるたびに背景もランダムに変わります。") # 説明を更新
-    print("操作方法:")
-    print(" - 十字キー (← → / A D): 単語を切り替え (意味は隠れます)")
-    print(" - C キー (Xボタン相当): 前の単語へ (意味は隠れます)")
-    print(" - X キー (Bボタン相当): 次の単語へ (意味は隠れます)")
-    print(" - Z キー (Aボタン相当): 日本語訳の表示/非表示")
-    print(" - Q キー: 終了")
+    print("単語を切り替えるたびに背景もランダムに変わります。")
+    print("操作方法 (キーボード | ゲームパッド):")
+    print(" - 単語を前へ: ←/A/C キー | DPAD LEFT / Xボタン")
+    print(" - 単語を次へ: →/D/X キー | DPAD RIGHT / Bボタン")
+    print(" - 意味表示/非表示: Z キー | Aボタン / DPAD DOWN")
+    print(" - 終了: Q キー")
     print("------------------------------------")
     print("カスタムフォント 'assets/umplus_j12r.bdf' があれば使用されます。")
     print("ない場合はPyxelのシステムフォントが使用されます。")
